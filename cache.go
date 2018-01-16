@@ -2,15 +2,15 @@ package memstore
 
 import "sync"
 
+type cache struct {
+	data  map[string]ValueType
+	mutex sync.RWMutex
+}
+
 func newCache() cache {
 	return cache{
 		data: make(map[string]ValueType),
 	}
-}
-
-type cache struct {
-	data  map[string]ValueType
-	mutex sync.RWMutex
 }
 
 func (c *cache) value(name string) (ValueType, bool) {
