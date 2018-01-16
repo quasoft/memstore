@@ -15,8 +15,10 @@ type MemStore struct {
 	Codecs        []securecookie.Codec
 	Options       *sessions.Options
 	DefaultMaxAge int
-	cache         map[string]map[interface{}]interface{}
+	cache         cache
 }
+
+type ValueType = map[interface{}]interface{}
 
 func NewMemStore(keyPairs ...[]byte) *MemStore {
 	store := MemStore{
@@ -24,7 +26,7 @@ func NewMemStore(keyPairs ...[]byte) *MemStore {
 		Options: &sessions.Options{
 			Path: "/",
 		},
-		cache: make(map[string]map[interface{}]interface{}),
+		cache: newCache(),
 	}
 	return &store
 }
@@ -42,9 +44,9 @@ func (m *MemStore) New(r *http.Request, name string) (*sessions.Session, error) 
 	if c, errCookie := r.Cookie(name); errCookie == nil {
 		err := securecookie.DecodeMulti(name, c.Value, &session.ID, m.Codecs...)
 		if err == nil {
-			_, ok := m.cache[name]
+			v, ok := m.cache.value(name)
 			if ok {
-				values, err := m.copy(m.cache[name])
+				values, err := m.copy(v)
 				if err == nil {
 					session.Values = values
 				}
@@ -57,9 +59,7 @@ func (m *MemStore) New(r *http.Request, name string) (*sessions.Session, error) 
 
 func (m *MemStore) Save(r *http.Request, w http.ResponseWriter, s *sessions.Session) error {
 	if s.Options.MaxAge < 0 {
-		if _, ok := m.cache[s.Name()]; ok {
-			delete(m.cache, s.Name())
-		}
+		m.cache.delete(s.Name())
 		http.SetCookie(w, sessions.NewCookie(s.Name(), "", s.Options))
 		for k := range s.Values {
 			delete(s.Values, k)
@@ -69,7 +69,7 @@ func (m *MemStore) Save(r *http.Request, w http.ResponseWriter, s *sessions.Sess
 		if err != nil {
 			return err
 		}
-		m.cache[s.Name()] = sessionValues
+		m.cache.setValue(s.Name(), sessionValues)
 
 		encoded, err := securecookie.EncodeMulti(s.Name(), s.ID, m.Codecs...)
 		if err != nil {
@@ -80,7 +80,7 @@ func (m *MemStore) Save(r *http.Request, w http.ResponseWriter, s *sessions.Sess
 	return nil
 }
 
-func (m *MemStore) copy(v map[interface{}]interface{}) (map[interface{}]interface{}, error) {
+func (m *MemStore) copy(v ValueType) (ValueType, error) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 	dec := gob.NewDecoder(&buf)
@@ -88,7 +88,7 @@ func (m *MemStore) copy(v map[interface{}]interface{}) (map[interface{}]interfac
 	if err != nil {
 		return nil, err
 	}
-	var values map[interface{}]interface{}
+	var values ValueType
 	err = dec.Decode(&values)
 	if err != nil {
 		return nil, err
