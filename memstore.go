@@ -11,15 +11,32 @@ import (
 
 // MemStore is an in-memory implementation of gorilla/sessions suitable
 // for use in tests and development environments. Do not use in production.
+// Values are cached in a map. The cache is protected and can be used by
+// multiple goroutines.
 type MemStore struct {
 	Codecs        []securecookie.Codec
 	Options       *sessions.Options
 	DefaultMaxAge int
-	cache         cache
+	cache         *cache
 }
 
-type ValueType = map[interface{}]interface{}
+type valueType = map[interface{}]interface{}
 
+// NewCookieStore returns a new MemStore.
+//
+// Keys are defined in pairs to allow key rotation, but the common case is
+// to set a single authentication key and optionally an encryption key.
+//
+// The first key in a pair is used for authentication and the second for
+// encryption. The encryption key can be set to nil or omitted in the last
+// pair, but the authentication key is required in all pairs.
+//
+// It is recommended to use an authentication key with 32 or 64 bytes.
+// The encryption key, if set, must be either 16, 24, or 32 bytes to select
+// AES-128, AES-192, or AES-256 modes.
+//
+// Use the convenience function securecookie.GenerateRandomKey() to create
+// strong keys.
 func NewMemStore(keyPairs ...[]byte) *MemStore {
 	store := MemStore{
 		Codecs: securecookie.CodecsFromPairs(keyPairs...),
@@ -31,10 +48,22 @@ func NewMemStore(keyPairs ...[]byte) *MemStore {
 	return &store
 }
 
+// Get returns a session for the given name after adding it to the registry.
+//
+// It returns a new session if the sessions doesn't exist. Access IsNew on
+// the session to check if it is an existing session or a new one.
+//
+// It returns a new session and an error if the session exists but could
+// not be decoded.
 func (m *MemStore) Get(r *http.Request, name string) (*sessions.Session, error) {
 	return sessions.GetRegistry(r).Get(m, name)
 }
 
+// New returns a session for the given name without adding it to the registry.
+//
+// The difference between New() and Get() is that calling New() twice will
+// decode the session data twice, while Get() registers and reuses the same
+// decoded session after the first call.
 func (m *MemStore) New(r *http.Request, name string) (*sessions.Session, error) {
 	var err error
 	session := sessions.NewSession(m, name)
@@ -57,6 +86,7 @@ func (m *MemStore) New(r *http.Request, name string) (*sessions.Session, error) 
 	return session, err
 }
 
+// Save adds a single session to the response.
 func (m *MemStore) Save(r *http.Request, w http.ResponseWriter, s *sessions.Session) error {
 	if s.Options.MaxAge < 0 {
 		m.cache.delete(s.Name())
@@ -80,7 +110,7 @@ func (m *MemStore) Save(r *http.Request, w http.ResponseWriter, s *sessions.Sess
 	return nil
 }
 
-func (m *MemStore) copy(v ValueType) (ValueType, error) {
+func (m *MemStore) copy(v valueType) (valueType, error) {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 	dec := gob.NewDecoder(&buf)
@@ -88,7 +118,7 @@ func (m *MemStore) copy(v ValueType) (ValueType, error) {
 	if err != nil {
 		return nil, err
 	}
-	var values ValueType
+	var values valueType
 	err = dec.Decode(&values)
 	if err != nil {
 		return nil, err
