@@ -16,8 +16,8 @@ func newCache() *cache {
 }
 
 func (c *cache) value(name string) (valueType, bool) {
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
+	c.mutex.RLock()
+	defer c.mutex.RUnlock()
 
 	v, ok := c.data[name]
 	return v, ok
