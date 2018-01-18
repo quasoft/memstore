@@ -9,7 +9,7 @@ import (
 	"github.com/gorilla/sessions"
 )
 
-// MemStore is an in-memory implementation of gorilla/sessions suitable
+// MemStore is an in-memory implementation of gorilla/sessions, suitable
 // for use in tests and development environments. Do not use in production.
 // Values are cached in a map. The cache is protected and can be used by
 // multiple goroutines.
@@ -22,7 +22,7 @@ type MemStore struct {
 
 type valueType = map[interface{}]interface{}
 
-// NewCookieStore returns a new MemStore.
+// NewMemStore returns a new MemStore.
 //
 // Keys are defined in pairs to allow key rotation, but the common case is
 // to set a single authentication key and optionally an encryption key.
@@ -87,6 +87,7 @@ func (m *MemStore) New(r *http.Request, name string) (*sessions.Session, error) 
 }
 
 // Save adds a single session to the response.
+// Set Options.MaxAge to -1 before saving the session to delete all values in it.
 func (m *MemStore) Save(r *http.Request, w http.ResponseWriter, s *sessions.Session) error {
 	if s.Options.MaxAge < 0 {
 		m.cache.delete(s.Name())
