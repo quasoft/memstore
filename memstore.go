@@ -3,6 +3,7 @@ package memstore
 import (
 	"bytes"
 	"encoding/gob"
+	"fmt"
 	"net/http"
 
 	"github.com/gorilla/securecookie"
@@ -65,64 +66,70 @@ func (m *MemStore) Get(r *http.Request, name string) (*sessions.Session, error) 
 // decode the session data twice, while Get() registers and reuses the same
 // decoded session after the first call.
 func (m *MemStore) New(r *http.Request, name string) (*sessions.Session, error) {
-	var err error
 	session := sessions.NewSession(m, name)
 	options := *m.Options
 	session.Options = &options
 	session.IsNew = true
-	if c, errCookie := r.Cookie(name); errCookie == nil {
-		err := securecookie.DecodeMulti(name, c.Value, &session.ID, m.Codecs...)
-		if err == nil {
-			v, ok := m.cache.value(name)
-			if ok {
-				values, err := m.copy(v)
-				if err == nil {
-					session.Values = values
-				}
-			}
-			session.IsNew = !ok
-		}
+
+	c, err := r.Cookie(name)
+	if err != nil {
+		// Cookie not found, this is a new session
+		return session, nil
 	}
-	return session, err
+
+	err = securecookie.DecodeMulti(name, c.Value, &session.ID, m.Codecs...)
+	if err != nil {
+		// Value could not be decrypted, consider this is a new session
+		return session, err
+	}
+
+	v, ok := m.cache.value(name)
+	if !ok {
+		// No value found in cache, don't set any values in session object,
+		// consider a new session
+		return session, nil
+	}
+
+	// Values found in session, this is not a new session
+	session.Values = m.copy(v)
+	session.IsNew = false
+	return session, nil
 }
 
 // Save adds a single session to the response.
 // Set Options.MaxAge to -1 before saving the session to delete all values in it.
 func (m *MemStore) Save(r *http.Request, w http.ResponseWriter, s *sessions.Session) error {
+	var cookieValue string
 	if s.Options.MaxAge < 0 {
+		cookieValue = ""
 		m.cache.delete(s.Name())
-		http.SetCookie(w, sessions.NewCookie(s.Name(), "", s.Options))
 		for k := range s.Values {
 			delete(s.Values, k)
 		}
 	} else {
-		sessionValues, err := m.copy(s.Values)
+		encrypted, err := securecookie.EncodeMulti(s.Name(), s.ID, m.Codecs...)
 		if err != nil {
 			return err
 		}
-		m.cache.setValue(s.Name(), sessionValues)
-
-		encoded, err := securecookie.EncodeMulti(s.Name(), s.ID, m.Codecs...)
-		if err != nil {
-			return err
-		}
-		http.SetCookie(w, sessions.NewCookie(s.Name(), encoded, s.Options))
+		cookieValue = encrypted
+		m.cache.setValue(s.Name(), m.copy(s.Values))
 	}
+	http.SetCookie(w, sessions.NewCookie(s.Name(), cookieValue, s.Options))
 	return nil
 }
 
-func (m *MemStore) copy(v valueType) (valueType, error) {
+func (m *MemStore) copy(v valueType) valueType {
 	var buf bytes.Buffer
 	enc := gob.NewEncoder(&buf)
 	dec := gob.NewDecoder(&buf)
 	err := enc.Encode(v)
 	if err != nil {
-		return nil, err
+		panic(fmt.Errorf("could not copy memstore value. Encoding to gob failed: %v", err))
 	}
-	var values valueType
-	err = dec.Decode(&values)
+	var value valueType
+	err = dec.Decode(&value)
 	if err != nil {
-		return nil, err
+		panic(fmt.Errorf("could not copy memstore value. Decoding from gob failed: %v", err))
 	}
-	return values, nil
+	return value
 }
