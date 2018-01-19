@@ -15,10 +15,9 @@ import (
 // Values are cached in a map. The cache is protected and can be used by
 // multiple goroutines.
 type MemStore struct {
-	Codecs        []securecookie.Codec
-	Options       *sessions.Options
-	DefaultMaxAge int
-	cache         *cache
+	Codecs  []securecookie.Codec
+	Options *sessions.Options
+	cache   *cache
 }
 
 type valueType = map[interface{}]interface{}
@@ -42,10 +41,12 @@ func NewMemStore(keyPairs ...[]byte) *MemStore {
 	store := MemStore{
 		Codecs: securecookie.CodecsFromPairs(keyPairs...),
 		Options: &sessions.Options{
-			Path: "/",
+			Path:   "/",
+			MaxAge: 86400 * 30,
 		},
 		cache: newCache(),
 	}
+	store.MaxAge(store.Options.MaxAge)
 	return &store
 }
 
@@ -97,7 +98,7 @@ func (m *MemStore) New(r *http.Request, name string) (*sessions.Session, error) 
 }
 
 // Save adds a single session to the response.
-// Set Options.MaxAge to -1 before saving the session to delete all values in it.
+// Set Options.MaxAge to -1 or call MaxAge(-1) before saving the session to delete all values in it.
 func (m *MemStore) Save(r *http.Request, w http.ResponseWriter, s *sessions.Session) error {
 	var cookieValue string
 	if s.Options.MaxAge < 0 {
@@ -116,6 +117,20 @@ func (m *MemStore) Save(r *http.Request, w http.ResponseWriter, s *sessions.Sess
 	}
 	http.SetCookie(w, sessions.NewCookie(s.Name(), cookieValue, s.Options))
 	return nil
+}
+
+// MaxAge sets the maximum age for the store and the underlying cookie
+// implementation. Individual sessions can be deleted by setting Options.MaxAge
+// = -1 for that session.
+func (m *MemStore) MaxAge(age int) {
+	m.Options.MaxAge = age
+
+	// Set the maxAge for each securecookie instance.
+	for _, codec := range m.Codecs {
+		if sc, ok := codec.(*securecookie.SecureCookie); ok {
+			sc.MaxAge(age)
+		}
+	}
 }
 
 func (m *MemStore) copy(v valueType) valueType {
