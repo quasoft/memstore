@@ -1,8 +1,10 @@
 package memstore
 
 import (
+	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/gorilla/sessions"
@@ -124,4 +126,39 @@ func TestMemStore_Delete(t *testing.T) {
 	if session.Values["key"] == "somevalue" {
 		t.Error("cookie was not deleted from session after setting session.Options.MaxAge = -1 and saving")
 	}
+}
+
+func BenchmarkRace(b *testing.B) {
+	store := NewMemStore(
+		[]byte("authkey"),
+		[]byte("enckey1234567890"),
+	)
+
+	var wg sync.WaitGroup
+
+	s := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		defer wg.Done()
+
+		session, err := store.Get(r, "mycookiename")
+		if err != nil {
+			b.Fatalf("failed to create session from empty request: %v", err)
+		}
+		session.Values["key"] = "somevalue"
+		session.Save(r, w)
+
+		// And immediately delete it
+		session.Options.MaxAge = -1
+		session.Save(r, w)
+
+		_ = session.Values["key"]
+	}))
+
+	loops := 100
+	wg.Add(loops)
+	for i := 1; i <= loops; i++ {
+		go http.Get(s.URL)
+	}
+
+	wg.Wait()
+	s.Close()
 }
