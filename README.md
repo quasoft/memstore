@@ -1,5 +1,7 @@
 # memstore
 
+[![GoDoc](https://godoc.org/github.com/quasoft/memstore?status.svg)](https://godoc.org/github.com/quasoft/memstore) [![Build Status](https://travis-ci.org/quasoft/memstore.png?branch=master)](https://travis-ci.org/quasoft/memstore) [![Coverage Status](https://coveralls.io/repos/github/quasoft/memstore/badge.svg?branch=master)](https://coveralls.io/github/quasoft/memstore?branch=master) [![Go Report Card](https://goreportcard.com/badge/github.com/gernest/qlstore)](https://goreportcard.com/report/github.com/gernest/qlstore)
+
 In-memory implementation of [gorilla/sessions](https://github.com/gorilla/sessions) for use in tests and dev environments
 
 ## How to install
