@@ -152,13 +152,12 @@ func BenchmarkRace(b *testing.B) {
 
 		_ = session.Values["key"]
 	}))
+	defer s.Close()
 
 	loops := 100
 	wg.Add(loops)
 	for i := 1; i <= loops; i++ {
 		go http.Get(s.URL)
 	}
-
 	wg.Wait()
-	s.Close()
 }
