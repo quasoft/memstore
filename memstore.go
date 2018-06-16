@@ -20,7 +20,7 @@ type MemStore struct {
 	cache   *cache
 }
 
-type valueType = map[interface{}]interface{}
+type valueType map[interface{}]interface{}
 
 // NewMemStore returns a new MemStore.
 //
