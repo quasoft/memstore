@@ -84,7 +84,7 @@ func (m *MemStore) New(r *http.Request, name string) (*sessions.Session, error) 
 		return session, err
 	}
 
-	v, ok := m.cache.value(name)
+	v, ok := m.cache.value(session.ID)
 	if !ok {
 		// No value found in cache, don't set any values in session object,
 		// consider a new session
@@ -108,12 +108,15 @@ func (m *MemStore) Save(r *http.Request, w http.ResponseWriter, s *sessions.Sess
 			delete(s.Values, k)
 		}
 	} else {
+		if s.ID == "" {
+			s.ID = strings.TrimRight(base32.StdEncoding.EncodeToString(securecookie.GenerateRandomKey(32)), "=")
+		}
 		encrypted, err := securecookie.EncodeMulti(s.Name(), s.ID, m.Codecs...)
 		if err != nil {
 			return err
 		}
 		cookieValue = encrypted
-		m.cache.setValue(s.Name(), m.copy(s.Values))
+		m.cache.setValue(s.ID, m.copy(s.Values))
 	}
 	http.SetCookie(w, sessions.NewCookie(s.Name(), cookieValue, s.Options))
 	return nil
