@@ -116,7 +116,6 @@ func (m *MemStore) Save(r *http.Request, w http.ResponseWriter, s *sessions.Sess
 			return err
 		}
 		cookieValue = encrypted
-		//m.cache.setValue(s.Name(), m.copy(s.Values))
 		m.cache.setValue(s.ID, m.copy(s.Values))
 	}
 	http.SetCookie(w, sessions.NewCookie(s.Name(), cookieValue, s.Options))
