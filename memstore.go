@@ -2,9 +2,11 @@ package memstore
 
 import (
 	"bytes"
+	"encoding/base32"
 	"encoding/gob"
 	"fmt"
 	"net/http"
+	"strings"
 
 	"github.com/gorilla/securecookie"
 	"github.com/gorilla/sessions"
