@@ -105,7 +105,7 @@ func (m *MemStore) Save(r *http.Request, w http.ResponseWriter, s *sessions.Sess
 	var cookieValue string
 	if s.Options.MaxAge < 0 {
 		cookieValue = ""
-		m.cache.delete(s.Name())
+		m.cache.delete(s.ID)
 		for k := range s.Values {
 			delete(s.Values, k)
 		}
